@@ -1,0 +1,35 @@
+# JeevanPath
+
+JeevanPath is a browser voice prototype for a post-discharge assistant using synthetic patient data only.
+
+The backend runs audio through configurable Gnani Prisma, deterministic safety rules, Gnani Evon, and Gnani Timbre adapters. Provider URLs and keys are required environment variables; no vendor endpoint is assumed by the application.
+
+## Local development
+
+```powershell
+cd backend
+python -m pip install -e ".[test]"
+pytest
+uvicorn app.main:app --reload
+```
+
+In another terminal:
+
+```powershell
+cd dashboard
+npm install
+npm run typecheck
+npm run dev
+```
+
+Copy `backend/.env.example` to `.env` and set the Prisma and Timbre URLs and keys before attempting a real voice turn. The backend loads this file with `python-dotenv`; `.env` is ignored by Git.
+
+The documented REST adapters use Gnani's Vachana API:
+
+- Prisma: `POST /stt/v3`, multipart `audio_file`, `language_code`, `model=prisma-v3.0`, and `format=transcribe`; response JSON contains `transcript`.
+- Timbre: `POST /api/v1/tts/inference`, JSON text/voice/model/audio configuration; response is audio bytes, configured here as 48 kHz linear PCM WAV.
+- Authentication uses `X-API-Key-ID`; secrets are never included in health responses.
+
+No Evon HTTP adapter is implemented because no reasoning API is available. Deterministic safety rules remain authoritative; without verified discharge context or a reasoning provider, the workflow returns a safe uncertainty response and opens human review.
+
+The browser test page is available at `http://localhost:3000`.

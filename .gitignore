@@ -1,0 +1,16 @@
+.env
+__pycache__/
+.pytest_cache/
+.next/
+node_modules/
+*.egg-info/
+*.tsbuildinfo
+*.db
+*.sqlite
+*.sqlite3
+*.wav
+*.mp3
+*.ogg
+*.webm
+*.m4a
+*.aac
