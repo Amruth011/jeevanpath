@@ -30,7 +30,14 @@ async def initialize_database(request, call_next):
 def _providers():
     return (
         GnaniPrisma("Prisma", settings.prisma_url, settings.prisma_api_key, settings.stt_language_code),
-        GnaniTimbre("Timbre", settings.timbre_url, settings.timbre_api_key, settings.tts_voice),
+        GnaniTimbre(
+            "Timbre",
+            settings.timbre_url,
+            settings.timbre_api_key,
+            settings.tts_model,
+            settings.tts_voice,
+            settings.tts_language_code,
+        ),
     )
 
 

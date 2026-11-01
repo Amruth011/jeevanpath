@@ -19,7 +19,9 @@ class Settings:
     timbre_url: str | None = os.getenv("GNANI_TIMBRE_URL")
     timbre_api_key: str | None = os.getenv("GNANI_TIMBRE_API_KEY")
     stt_language_code: str = os.getenv("GNANI_STT_LANGUAGE_CODE", "en-IN")
+    tts_model: str = os.getenv("GNANI_TTS_MODEL", "timbre-v2.5")
     tts_voice: str = os.getenv("GNANI_TTS_VOICE", "Pranav")
+    tts_language_code: str = os.getenv("GNANI_TTS_LANGUAGE_CODE", "en-IN")
     demo_seed: bool = _env_flag("DEMO_SEED")
 
 

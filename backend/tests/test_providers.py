@@ -62,13 +62,52 @@ async def test_timbre_uses_documented_json_and_returns_audio(monkeypatch):
     response = httpx.Response(200, content=b"RIFFfake-wav", request=httpx.Request("POST", "https://example.test"))
     client = FakeAsyncClient(response)
     monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **kwargs: client)
-    provider = GnaniTimbre("Timbre", "https://api.vachana.ai/api/v1/tts/inference", "secret", "Pranav")
+    provider = GnaniTimbre(
+        "Timbre", "https://api.vachana.ai/api/v1/tts/inference", "secret",
+        "timbre-v2.5", "Pranav", "en-IN",
+    )
 
     assert await provider.synthesize("hello") == b"RIFFfake-wav"
     assert client.url == "https://api.vachana.ai/api/v1/tts/inference"
     assert client.kwargs["headers"]["X-API-Key-ID"] == "secret"
-    assert client.kwargs["json"]["model"] == "timbre-v2.0"
-    assert client.kwargs["json"]["audio_config"]["container"] == "wav"
+    assert client.kwargs["headers"]["X-API-Request-ID"]
+    assert client.kwargs["json"]["model"] == "timbre-v2.5"
+    assert client.kwargs["json"]["voice"] == "Pranav"
+    assert client.kwargs["json"]["language"] == "en-IN"
+    assert client.kwargs["json"]["speed"] == 1.0
+    assert client.kwargs["json"]["audio_config"] == {
+        "sample_rate": 48000,
+        "num_channels": 1,
+        "sample_width": 2,
+        "encoding": "linear_pcm",
+        "container": "wav",
+    }
+
+
+@pytest.mark.asyncio
+async def test_timbre_surfaces_safe_error_body(monkeypatch):
+    response = httpx.Response(
+        400,
+        text='{"error":{"type":"INVALID_MODEL","message":"Model is not supported"}}',
+        request=httpx.Request("POST", "https://example.test"),
+    )
+    client = FakeAsyncClient(response)
+    monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **kwargs: client)
+
+    with pytest.raises(Exception, match="INVALID_MODEL"):
+        await GnaniTimbre(
+            "Timbre", "https://example.test", "secret",
+            "timbre-v2.5", "Pranav", "en-IN",
+        ).synthesize("hello")
+
+
+@pytest.mark.asyncio
+async def test_timbre_rejects_undocumented_configuration():
+    with pytest.raises(Exception, match="not documented"):
+        await GnaniTimbre(
+            "Timbre", "https://example.test", "secret",
+            "timbre-v2.0", "Pranav", "en-IN",
+        ).synthesize("hello")
 
 
 def test_health_never_returns_api_key(monkeypatch):
