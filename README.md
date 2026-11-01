@@ -26,6 +26,7 @@ Copy `backend/.env.example` to `.env` and set the Prisma and Timbre URLs and key
 
 The documented REST adapters use Gnani's Vachana API:
 
+- Health check: `GET /api/health` (the unprefixed `/health` endpoint remains available for local use).
 - Prisma: `POST /stt/v3`, multipart `audio_file`, `language_code`, `model=prisma-v3.0`, and `format=transcribe`; response JSON contains `transcript`.
 - Timbre: `POST /api/v1/tts/inference`, JSON text/voice/model/audio configuration; response is audio bytes, configured here as 48 kHz linear PCM WAV.
 - Authentication uses `X-API-Key-ID`; secrets are never included in health responses.

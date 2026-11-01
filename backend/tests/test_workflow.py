@@ -14,6 +14,11 @@ class FakeTimbre(GnaniTimbre):
         return b"RIFFfake-wav"
 
 
+def test_api_health_matches_health():
+    client = TestClient(app)
+    assert client.get("/api/health").json() == client.get("/health").json()
+
+
 def test_dangerous_turn_skips_reasoning_and_tts(monkeypatch):
     monkeypatch.setattr("app.main._providers", lambda: (FakePrisma("p", "u", "k"), FakeTimbre("t", "u", "k")))
     response = TestClient(app).post(

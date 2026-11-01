@@ -25,6 +25,7 @@ def _providers():
 
 
 @app.get("/health")
+@app.get("/api/health")
 async def health():
     prisma, timbre = _providers()
     return {
