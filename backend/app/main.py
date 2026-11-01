@@ -3,7 +3,7 @@ import base64
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from .config import settings
-from .database import save_escalation, save_message
+from .database import connection, save_escalation, save_message
 from .models import CONVERSATIONS, ESCALATIONS, PATIENTS, Escalation, new_id
 from .providers import (
     GnaniPrisma,
@@ -12,7 +12,7 @@ from .providers import (
     ProviderError,
 )
 from .safety import evaluate_transcript, validate_response
-from .schemas import ModelEvent, TurnResponse
+from .schemas import ModelEvent, PatientResponse, TurnResponse
 
 app = FastAPI(title="JeevanPath API", version="0.1.0")
 
@@ -22,6 +22,38 @@ def _providers():
         GnaniPrisma("Prisma", settings.prisma_url, settings.prisma_api_key, settings.stt_language_code),
         GnaniTimbre("Timbre", settings.timbre_url, settings.timbre_api_key, settings.tts_voice),
     )
+
+
+def _patient_from_row(row) -> dict:
+    patient = dict(row)
+    patient["synthetic"] = bool(patient["synthetic"])
+    patient["test_record"] = bool(patient["test_record"])
+    return patient
+
+
+def _patient_detail(patient_id: str) -> dict | None:
+    with connection() as db:
+        patient = db.execute(
+            "SELECT * FROM patients WHERE id = ? AND synthetic = 1 AND test_record = 1",
+            (patient_id,),
+        ).fetchone()
+        if patient is None:
+            return None
+        result = _patient_from_row(patient)
+        result["activities"] = [
+            dict(row)
+            for row in db.execute(
+                """
+                SELECT id, text, occurred_at, tone, synthetic
+                FROM activities
+                WHERE patient_id = ? AND synthetic = 1
+                ORDER BY occurred_at DESC
+                """,
+                (patient_id,),
+            )
+        ]
+        result["escalations"] = []
+        return result
 
 
 @app.get("/health")
@@ -41,7 +73,84 @@ async def health():
 
 @app.get("/api/patients")
 async def patients():
-    return [patient.__dict__ for patient in PATIENTS]
+    with connection() as db:
+        rows = db.execute(
+            "SELECT * FROM patients WHERE synthetic = 1 AND test_record = 1 ORDER BY name"
+        ).fetchall()
+    return [_patient_from_row(row) for row in rows]
+
+
+@app.get("/api/patients/{patient_id}", response_model=PatientResponse)
+async def patient_detail(patient_id: str):
+    patient = _patient_detail(patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+    return patient
+
+
+@app.get("/api/activity")
+async def activity():
+    with connection() as db:
+        rows = db.execute(
+            """
+            SELECT a.id, a.patient_id, p.name AS patient_name, a.text,
+                   a.occurred_at, a.tone, a.synthetic
+            FROM activities a
+            JOIN patients p ON p.id = a.patient_id
+            WHERE a.synthetic = 1 AND p.synthetic = 1 AND p.test_record = 1
+            ORDER BY a.occurred_at DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.get("/api/escalations")
+async def escalations():
+    with connection() as db:
+        rows = db.execute(
+            """
+            SELECT e.id, e.conversation_id, e.reason, e.risk_level,
+                   e.status, e.created_at, e.synthetic, e.test_record
+            FROM escalations e
+            WHERE e.synthetic = 1 AND e.test_record = 1
+            ORDER BY e.created_at DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.get("/api/overview")
+async def overview():
+    with connection() as db:
+        counts = db.execute(
+            """
+            SELECT COUNT(*) AS patient_count,
+                   SUM(CASE WHEN risk_level = 'low' THEN 1 ELSE 0 END) AS low_risk,
+                   SUM(CASE WHEN risk_level = 'medium' THEN 1 ELSE 0 END) AS medium_risk,
+                   SUM(CASE WHEN risk_level = 'high' THEN 1 ELSE 0 END) AS high_risk
+            FROM patients
+            WHERE synthetic = 1 AND test_record = 1
+            """
+        ).fetchone()
+        pending = db.execute(
+            "SELECT COUNT(*) FROM escalations WHERE status = 'open' AND synthetic = 1 AND test_record = 1"
+        ).fetchone()[0]
+        follow_ups = db.execute(
+            "SELECT COUNT(*) FROM patients WHERE synthetic = 1 AND test_record = 1 AND follow_up != ''"
+        ).fetchone()[0]
+    return {
+        "patient_count": counts["patient_count"],
+        "pending_escalations": pending,
+        "follow_ups": follow_ups,
+        "unanswered_calls": 0,
+        "risk_counts": {
+            "low": counts["low_risk"] or 0,
+            "medium": counts["medium_risk"] or 0,
+            "high": counts["high_risk"] or 0,
+        },
+        "synthetic": True,
+        "test_record": True,
+    }
 
 
 @app.post("/api/conversations/{conversation_id}/turn", response_model=TurnResponse)

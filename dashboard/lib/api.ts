@@ -7,6 +7,55 @@ export type TurnResponse = {
   error?: string | null;
 };
 
+export type Patient = {
+  id: string;
+  name: string;
+  case_id: string;
+  language: string;
+  status: string;
+  risk_level: "none" | "low" | "medium" | "high" | "unknown";
+  age: number;
+  caregiver: string;
+  phone: string;
+  consent: string;
+  follow_up: string;
+  synthetic: boolean;
+  test_record: boolean;
+  activities: Activity[];
+  escalations: Escalation[];
+};
+
+export type Activity = {
+  id: string;
+  patient_id: string;
+  patient_name?: string;
+  text: string;
+  occurred_at: string;
+  tone: string;
+  synthetic: boolean;
+};
+
+export type Escalation = {
+  id: string;
+  conversation_id: string;
+  reason: string;
+  risk_level: string;
+  status: string;
+  created_at: string;
+  synthetic: boolean;
+  test_record: boolean;
+};
+
+export type Overview = {
+  patient_count: number;
+  pending_escalations: number;
+  follow_ups: number;
+  unanswered_calls: number;
+  risk_counts: { low: number; medium: number; high: number };
+  synthetic: boolean;
+  test_record: boolean;
+};
+
 const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -33,7 +82,7 @@ export async function submitVoiceTurn(audio: Blob): Promise<TurnResponse> {
 
   const form = new FormData();
   form.append("audio", audio, "patient.webm");
-  const response = await fetch(`${API_BASE_URL}/api/conversations/conversation-001/turn`, {
+  const response = await fetch(`${API_BASE_URL}/conversations/conversation-001/turn`, {
     method: "POST",
     body: form,
   });
@@ -51,3 +100,17 @@ export async function submitVoiceTurn(audio: Blob): Promise<TurnResponse> {
 
   return body;
 }
+
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+  if (!response.ok) {
+    throw new Error(`The care service returned ${response.status}.`);
+  }
+  return response.json() as Promise<T>;
+}
+
+export const getOverview = () => getJson<Overview>("/overview");
+export const getPatients = () => getJson<Patient[]>("/patients");
+export const getPatient = (id: string) => getJson<Patient>(`/patients/${id}`);
+export const getActivity = () => getJson<Activity[]>("/activity");
+export const getEscalations = () => getJson<Escalation[]>("/escalations");

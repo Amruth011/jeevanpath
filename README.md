@@ -10,6 +10,7 @@ The backend runs audio through configurable Gnani Prisma, deterministic safety r
 cd backend
 python -m pip install -e ".[test]"
 pytest
+python -m app.seed
 uvicorn app.main:app --reload
 ```
 
@@ -23,6 +24,8 @@ npm run dev
 ```
 
 Copy `backend/.env.example` to `.env` and set the Prisma and Timbre URLs and keys before attempting a real voice turn. The backend loads this file with `python-dotenv`; `.env` is ignored by Git.
+
+The seed command explicitly inserts one synthetic development test patient into SQLite. It is never run automatically, and the dashboard rejects the assumption that records are real clinical data without consent.
 
 The documented REST adapters use Gnani's Vachana API:
 

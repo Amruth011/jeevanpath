@@ -31,7 +31,7 @@ class Escalation:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
-PATIENTS = [Patient("patient-001", "Asha Rao")]
+PATIENTS = [Patient("test-patient-001", "Test Patient")]
 CONVERSATIONS = {
     "conversation-001": Conversation("conversation-001", "patient-001")
 }
