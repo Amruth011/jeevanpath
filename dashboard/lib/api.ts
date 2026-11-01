@@ -11,6 +11,7 @@ export type Patient = {
   id: string;
   name: string;
   case_id: string;
+  conversation_id: string;
   language: string;
   status: string;
   risk_level: "none" | "low" | "medium" | "high" | "unknown";
@@ -56,6 +57,16 @@ export type Overview = {
   test_record: boolean;
 };
 
+export type TestCase = {
+  available: boolean;
+  requirement: string | null;
+  patient_id: string | null;
+  conversation_id: string | null;
+  patient_name: string | null;
+  synthetic: boolean;
+  test_record: boolean;
+};
+
 const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -74,7 +85,7 @@ const mockTurnResponse: TurnResponse = {
   escalation_status: "not_required",
 };
 
-export async function submitVoiceTurn(audio: Blob): Promise<TurnResponse> {
+export async function submitVoiceTurn(audio: Blob, conversationId = "conversation-001"): Promise<TurnResponse> {
   if (MOCK_MODE) {
     await new Promise((resolve) => window.setTimeout(resolve, 700));
     return mockTurnResponse;
@@ -82,7 +93,7 @@ export async function submitVoiceTurn(audio: Blob): Promise<TurnResponse> {
 
   const form = new FormData();
   form.append("audio", audio, "patient.webm");
-  const response = await fetch(`${API_BASE_URL}/conversations/conversation-001/turn`, {
+  const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/turn`, {
     method: "POST",
     body: form,
   });
@@ -114,3 +125,4 @@ export const getPatients = () => getJson<Patient[]>("/patients");
 export const getPatient = (id: string) => getJson<Patient>(`/patients/${id}`);
 export const getActivity = () => getJson<Activity[]>("/activity");
 export const getEscalations = () => getJson<Escalation[]>("/escalations");
+export const getTestCase = () => getJson<TestCase>("/test-case");

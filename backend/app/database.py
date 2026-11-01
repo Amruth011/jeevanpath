@@ -39,6 +39,7 @@ def connection() -> sqlite3.Connection:
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             case_id TEXT NOT NULL UNIQUE,
+            conversation_id TEXT NOT NULL DEFAULT 'conversation-001',
             language TEXT NOT NULL,
             status TEXT NOT NULL,
             risk_level TEXT NOT NULL,
@@ -66,6 +67,11 @@ def connection() -> sqlite3.Connection:
         db.execute("ALTER TABLE escalations ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 1")
     if "test_record" not in escalation_columns:
         db.execute("ALTER TABLE escalations ADD COLUMN test_record INTEGER NOT NULL DEFAULT 1")
+    patient_columns = {row["name"] for row in db.execute("PRAGMA table_info(patients)")}
+    if "conversation_id" not in patient_columns:
+        db.execute(
+            "ALTER TABLE patients ADD COLUMN conversation_id TEXT NOT NULL DEFAULT 'conversation-001'"
+        )
     return db
 
 

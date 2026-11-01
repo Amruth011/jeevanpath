@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getActivity,
   getEscalations,
   getOverview,
   getPatient,
   getPatients,
+  getTestCase,
+  submitVoiceTurn,
   type Activity,
   type Escalation,
   type Overview as OverviewData,
   type Patient,
+  type TestCase,
 } from "../lib/api";
 
 type View = "overview" | "patients" | "patient" | "escalations" | "voice";
@@ -83,6 +86,51 @@ function EscalationsView({ escalations }: { escalations: Escalation[] }) {
   return <div className="space-y-6"><div><p className="text-sm text-slate-500">Synthetic test records only.</p><h2 className="mt-1 text-2xl font-black text-navy">Escalation queue</h2></div><section className="panel p-5">{escalations.length ? escalations.map((item) => <div key={item.id} className="border-b border-slate-100 py-4 last:border-0"><div className="flex justify-between gap-3"><p className="font-bold text-ink">{item.reason}</p><Badge tone={item.risk_level === "high" ? "red" : "amber"}>{item.risk_level}</Badge></div><p className="mt-1 text-xs text-slate-500">{item.status} · {new Date(item.created_at).toLocaleString()}</p></div>) : <EmptyState text="No escalations in the test database." />}</section></div>;
 }
 
+function VoiceTest({ testCase, onRetry }: { testCase: TestCase | null; onRetry: () => void }) {
+  const [recording, setRecording] = useState(false);
+  const [message, setMessage] = useState("Ready for a synthetic test recording.");
+  const recorder = useRef<MediaRecorder | null>(null);
+  const conversationId = testCase?.conversation_id;
+
+  if (!testCase?.available || !testCase.patient_id || !conversationId) return <div className="panel p-8 text-center"><p className="eyebrow">TEST DATA · Synthetic only</p><p className="mt-3 text-sm text-slate-600">{testCase?.requirement ?? "No synthetic test case was returned by the API."}</p><button onClick={onRetry} className="button-secondary mt-5">Retry test case</button></div>;
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMessage("Microphone access is not available in this browser.");
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setMessage("Microphone permission was not granted.");
+      return;
+    }
+    const chunks: Blob[] = [];
+    const mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (event) => chunks.push(event.data);
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach((track) => track.stop());
+      setRecording(false);
+      setMessage("Sending test recording...");
+      try {
+        const response = await submitVoiceTurn(new Blob(chunks, { type: "audio/webm" }), conversationId);
+        setMessage(response.response_text ?? response.error ?? "Test turn completed.");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "The test turn failed.");
+      }
+    };
+    recorder.current = mediaRecorder;
+    mediaRecorder.start();
+    setRecording(true);
+    setMessage("Recording synthetic test audio...");
+  };
+
+  const stopRecording = () => recorder.current?.stop();
+
+  return <div className="space-y-6"><div><p className="eyebrow">TEST DATA · Synthetic only</p><h2 className="mt-1 text-2xl font-black text-navy">Voice test</h2><p className="mt-2 text-sm text-slate-500">Testing is limited to {testCase.patient_name} ({testCase.conversation_id}). Do not submit real clinical data without consent.</p></div><section className="panel p-8 text-center"><div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-mint text-3xl text-teal">◉</div><button onClick={recording ? stopRecording : startRecording} className="button-primary mt-6">{recording ? "Stop recording" : "Start microphone test"}</button><p className="mt-4 text-sm text-slate-600">{message}</p></section></div>;
+}
+
 export default function Home() {
   const [view, setView] = useState<View>("overview");
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -90,18 +138,23 @@ export default function Home() {
   const [activity, setActivity] = useState<Activity[]>([]);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [testCase, setTestCase] = useState<TestCase | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([getOverview(), getPatients(), getActivity(), getEscalations()])
-      .then(([overviewData, patientData, activityData, escalationData]) => { setOverview(overviewData); setPatients(patientData); setActivity(activityData); setEscalations(escalationData); })
+    Promise.all([getOverview(), getPatients(), getActivity(), getEscalations(), getTestCase()])
+      .then(([overviewData, patientData, activityData, escalationData, testCaseData]) => { setOverview(overviewData); setPatients(patientData); setActivity(activityData); setEscalations(escalationData); setTestCase(testCaseData); })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load test data."));
   }, []);
+
+  const retryTestCase = () => {
+    getTestCase().then(setTestCase).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load the synthetic test case."));
+  };
 
   useEffect(() => {
     if (view === "patient" && patients[0]) getPatient(patients[0].id).then(setSelectedPatient).catch(() => setSelectedPatient(null));
   }, [view, patients]);
 
-  const content = error ? <div className="panel p-8 text-center text-sm text-urgent">{error}</div> : !overview ? <div className="panel p-8 text-center text-sm text-slate-500">Loading TEST DATA...</div> : view === "overview" ? <Overview data={overview} patients={patients} activity={activity} setView={setView} /> : view === "patients" ? <PatientsView patients={patients} setView={setView} /> : view === "patient" ? <PatientDetail patient={selectedPatient} setView={setView} /> : view === "escalations" ? <EscalationsView escalations={escalations} /> : <div className="panel p-8 text-center text-sm text-slate-500">Voice testing is available for the synthetic test patient only.</div>;
+  const content = error ? <div className="panel p-8 text-center text-sm text-urgent">{error}</div> : !overview ? <div className="panel p-8 text-center text-sm text-slate-500">Loading TEST DATA...</div> : view === "overview" ? <Overview data={overview} patients={patients} activity={activity} setView={setView} /> : view === "patients" ? <PatientsView patients={patients} setView={setView} /> : view === "patient" ? <PatientDetail patient={selectedPatient} setView={setView} /> : view === "escalations" ? <EscalationsView escalations={escalations} /> : <VoiceTest testCase={testCase} onRetry={retryTestCase} />;
   return <div className="min-h-screen bg-[#f7faf9] text-ink"><Sidebar view={view} setView={setView} escalationCount={overview?.pending_escalations ?? 0} /><div className="lg:pl-64"><Header view={view} setView={setView} /><main className="mx-auto max-w-7xl p-5 md:p-8">{content}</main></div></div>;
 }

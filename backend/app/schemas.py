@@ -24,6 +24,7 @@ class PatientResponse(BaseModel):
     id: str
     name: str
     case_id: str
+    conversation_id: str
     language: str
     status: str
     risk_level: RiskLevel
@@ -36,3 +37,13 @@ class PatientResponse(BaseModel):
     test_record: bool
     activities: list[dict]
     escalations: list[dict]
+
+
+class TestCaseResponse(BaseModel):
+    available: bool
+    requirement: str | None = None
+    patient_id: str | None = None
+    conversation_id: str | None = None
+    patient_name: str | None = None
+    synthetic: bool
+    test_record: bool

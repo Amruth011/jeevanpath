@@ -33,7 +33,7 @@ class Escalation:
 
 PATIENTS = [Patient("test-patient-001", "Test Patient")]
 CONVERSATIONS = {
-    "conversation-001": Conversation("conversation-001", "patient-001")
+    "conversation-001": Conversation("conversation-001", "test-patient-001")
 }
 ESCALATIONS: list[Escalation] = []
 
