@@ -12,7 +12,7 @@ from .providers import (
     ProviderError,
 )
 from .safety import evaluate_transcript, validate_response
-from .schemas import ModelEvent, PatientResponse, TurnResponse
+from .schemas import ModelEvent, PatientResponse, TestCaseResponse, TurnResponse
 from .seed import seed_demo_data_if_missing
 
 app = FastAPI(title="JeevanPath API", version="0.1.0")
@@ -88,6 +88,36 @@ async def patients():
             "SELECT * FROM patients WHERE synthetic = 1 AND test_record = 1 ORDER BY name"
         ).fetchall()
     return [_patient_from_row(row) for row in rows]
+
+
+@app.get("/api/test-case", response_model=TestCaseResponse)
+async def test_case():
+    with connection() as db:
+        patient = db.execute(
+            """
+            SELECT id, name, conversation_id
+            FROM patients
+            WHERE id = 'test-patient-001'
+              AND conversation_id = 'conversation-001'
+              AND synthetic = 1
+              AND test_record = 1
+            """
+        ).fetchone()
+    if patient is None:
+        return TestCaseResponse(
+            available=False,
+            requirement="No synthetic test case exists. Set DEMO_SEED=true and redeploy the demo.",
+            synthetic=True,
+            test_record=True,
+        )
+    return TestCaseResponse(
+        available=True,
+        patient_id=patient["id"],
+        conversation_id=patient["conversation_id"],
+        patient_name=patient["name"],
+        synthetic=True,
+        test_record=True,
+    )
 
 
 @app.get("/api/patients/{patient_id}", response_model=PatientResponse)
