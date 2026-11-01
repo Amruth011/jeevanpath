@@ -85,6 +85,12 @@ const mockTurnResponse: TurnResponse = {
   escalation_status: "not_required",
 };
 
+function audioExtension(type: string): string {
+  if (type.includes("ogg")) return "ogg";
+  if (type.includes("mp4")) return "m4a";
+  return "wav";
+}
+
 export async function submitVoiceTurn(audio: Blob, conversationId = "conversation-001"): Promise<TurnResponse> {
   if (MOCK_MODE) {
     await new Promise((resolve) => window.setTimeout(resolve, 700));
@@ -92,7 +98,7 @@ export async function submitVoiceTurn(audio: Blob, conversationId = "conversatio
   }
 
   const form = new FormData();
-  form.append("audio", audio, "patient.webm");
+  form.append("audio", audio, `patient.${audioExtension(audio.type)}`);
   const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/turn`, {
     method: "POST",
     body: form,

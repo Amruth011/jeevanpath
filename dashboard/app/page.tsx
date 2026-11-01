@@ -99,6 +99,13 @@ function VoiceTest({ testCase, onRetry }: { testCase: TestCase | null; onRetry: 
       setMessage("Microphone access is not available in this browser.");
       return;
     }
+    const mimeType = ["audio/ogg;codecs=opus", "audio/mp4"].find((candidate) =>
+      MediaRecorder.isTypeSupported(candidate)
+    );
+    if (!mimeType) {
+      setMessage("This browser cannot record in a Gnani-supported audio format. Use Chrome or Firefox with OGG support.");
+      return;
+    }
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -107,14 +114,14 @@ function VoiceTest({ testCase, onRetry }: { testCase: TestCase | null; onRetry: 
       return;
     }
     const chunks: Blob[] = [];
-    const mediaRecorder = new MediaRecorder(stream);
+    const mediaRecorder = new MediaRecorder(stream, { mimeType });
     mediaRecorder.ondataavailable = (event) => chunks.push(event.data);
     mediaRecorder.onstop = async () => {
       stream.getTracks().forEach((track) => track.stop());
       setRecording(false);
       setMessage("Sending test recording...");
       try {
-        const response = await submitVoiceTurn(new Blob(chunks, { type: "audio/webm" }), conversationId);
+        const response = await submitVoiceTurn(new Blob(chunks, { type: mimeType }), conversationId);
         setMessage(response.response_text ?? response.error ?? "Test turn completed.");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "The test turn failed.");
