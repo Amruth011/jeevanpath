@@ -25,7 +25,7 @@ npm run dev
 
 Copy `backend/.env.example` to `.env` and set the Prisma and Timbre URLs and keys before attempting a real voice turn. The backend loads this file with `python-dotenv`; `.env` is ignored by Git.
 
-The seed command explicitly inserts one clearly marked synthetic development test patient with conversation ID `conversation-001` into SQLite. It is idempotent and never runs automatically unless `DEMO_SEED=true` is explicitly configured. The dashboard rejects the assumption that records are real clinical data without consent. On Vercel, set `DEMO_SEED=true` only for the demo environment; leave it unset or set it to `false` for production data environments. The API uses the writable ephemeral `/tmp/jeevanpath.db` location on Vercel.
+The seed command explicitly inserts one clearly marked synthetic development test patient with conversation ID `conversation-001` into local SQLite. It is idempotent and never runs automatically unless `DEMO_SEED=true` is explicitly configured. The dashboard rejects the assumption that records are real clinical data without consent. For Vercel production, configure `DATABASE_URL` with a Neon PostgreSQL connection string; SQLite is local-development only and the API refuses to start on Vercel without PostgreSQL.
 
 The documented REST adapters use Gnani's Vachana API:
 
