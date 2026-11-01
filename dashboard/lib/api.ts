@@ -8,9 +8,14 @@ export type TurnResponse = {
 };
 
 const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+const isProduction = process.env.NODE_ENV === "production";
 
-export const API_BASE_URL = configuredApiBaseUrl || "http://localhost:8000";
-export const MOCK_MODE = !configuredApiBaseUrl;
+export const API_BASE_URL = isProduction
+  ? "/api"
+  : configuredApiBaseUrl
+    ? `${configuredApiBaseUrl.replace(/\/+$/, "")}/api`
+    : "http://localhost:8000/api";
+export const MOCK_MODE = !isProduction && !configuredApiBaseUrl;
 
 const mockTurnResponse: TurnResponse = {
   transcript: "I would like to confirm my follow-up appointment.",
