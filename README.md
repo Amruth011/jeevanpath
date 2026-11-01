@@ -39,6 +39,26 @@ No Evon HTTP adapter is implemented because no reasoning API is available. Deter
 
 The browser test page is available at `http://localhost:3000`.
 
+## WhatsApp voice channel
+
+The backend exposes a WhatsApp Cloud API webhook for synthetic testing:
+
+- Verification: `GET /api/whatsapp/webhook`
+- Incoming messages: `POST /api/whatsapp/webhook`
+
+Configure `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, and
+`WHATSAPP_PHONE_NUMBER_ID` in the backend environment. In Meta Business
+Manager, set the webhook callback URL to
+`https://<your-domain>/api/whatsapp/webhook`, use the same verify token, and
+subscribe to the `messages` field. Send a short voice message from a test
+number; the webhook downloads the audio, runs the existing Prisma → safety →
+Timbre pipeline, and replies in WhatsApp. Non-audio messages receive a short
+voice-message instruction.
+
+This channel currently maps incoming demo messages to `conversation-001` and
+must remain restricted to synthetic test data until authentication, consent,
+and durable production storage are added.
+
 ## Vercel deployments
 
 The GitHub repository is connected to Vercel. Pushes to `main` trigger a new

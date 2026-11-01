@@ -1,6 +1,6 @@
 import base64
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 
 from .config import settings
 from .database import connection, save_escalation, save_message
@@ -14,6 +14,7 @@ from .providers import (
 from .safety import evaluate_transcript, validate_response
 from .schemas import ModelEvent, PatientResponse, TestCaseResponse, TurnResponse
 from .seed import seed_demo_data_if_missing
+from .whatsapp import WhatsAppCloud, WhatsAppConfigurationError, WhatsAppError
 
 app = FastAPI(title="JeevanPath API", version="0.1.0")
 
@@ -38,6 +39,14 @@ def _providers():
             settings.tts_voice,
             settings.tts_language_code,
         ),
+    )
+
+
+def _whatsapp() -> WhatsAppCloud:
+    return WhatsAppCloud(
+        settings.whatsapp_access_token,
+        settings.whatsapp_phone_number_id,
+        settings.whatsapp_graph_version,
     )
 
 
@@ -84,6 +93,7 @@ async def health():
             "prisma": prisma.health(),
             "timbre": timbre.health(),
             "evon": {"configured": False, "status": "not_implemented"},
+            "whatsapp": {"configured": _whatsapp().configured},
         },
     }
 
@@ -200,15 +210,14 @@ async def overview():
     }
 
 
-@app.post("/api/conversations/{conversation_id}/turn", response_model=TurnResponse)
-async def conversation_turn(conversation_id: str, audio: UploadFile = File(...)):
+async def _process_voice_turn(conversation_id: str, audio: bytes, content_type: str, filename: str) -> TurnResponse:
     if conversation_id not in CONVERSATIONS:
         raise HTTPException(status_code=404, detail="Conversation not found.")
     events = [ModelEvent(model="prisma", status="started", detail="Transcribing audio.")]
     prisma, timbre = _providers()
     try:
         transcript = await prisma.transcribe(
-            await audio.read(), audio.content_type or "audio/webm", audio.filename or "audio.webm"
+            audio, content_type, filename
         )
         events[0] = ModelEvent(model="prisma", status="completed", detail="Transcript received.")
     except (ProviderConfigurationError, ProviderError) as exc:
@@ -251,3 +260,65 @@ async def conversation_turn(conversation_id: str, audio: UploadFile = File(...))
     save_message(conversation_id, transcript, response)
     audio_url = f"data:audio/wav;base64,{base64.b64encode(audio_bytes).decode('ascii')}"
     return TurnResponse(transcript=transcript, response_text=response, audio_url=audio_url, risk_level="unknown", escalation_status="open", model_events=events)
+
+
+@app.post("/api/conversations/{conversation_id}/turn", response_model=TurnResponse)
+async def conversation_turn(conversation_id: str, audio: UploadFile = File(...)):
+    return await _process_voice_turn(
+        conversation_id,
+        await audio.read(),
+        audio.content_type or "audio/webm",
+        audio.filename or "audio.webm",
+    )
+
+
+@app.get("/api/whatsapp/webhook")
+async def whatsapp_verify(
+    hub_mode: str | None = Query(None, alias="hub.mode"),
+    hub_verify_token: str | None = Query(None, alias="hub.verify_token"),
+    hub_challenge: str | None = Query(None, alias="hub.challenge"),
+):
+    if (
+        hub_mode == "subscribe"
+        and hub_verify_token
+        and hub_verify_token == settings.whatsapp_verify_token
+        and hub_challenge
+    ):
+        return int(hub_challenge)
+    raise HTTPException(status_code=403, detail="WhatsApp webhook verification failed.")
+
+
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    body = await request.json()
+    message = (
+        body.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+        .get("messages", [{}])[0]
+    )
+    if not message:
+        return {"status": "ignored"}
+    sender = message.get("from")
+    audio_id = message.get("audio", {}).get("id") if message.get("type") == "audio" else None
+    client = _whatsapp()
+    if not sender:
+        return {"status": "ignored"}
+    if not audio_id:
+        if message.get("type") == "text":
+            await client.send_text(sender, "Please send a short voice message for JeevanPath.")
+        return {"status": "ignored"}
+    try:
+        audio, content_type = await client.download_media(audio_id)
+        result = await _process_voice_turn("conversation-001", audio, content_type, "whatsapp-audio")
+        if result.audio_url:
+            import binascii
+            encoded = result.audio_url.split(",", 1)[1]
+            await client.send_audio(sender, binascii.a2b_base64(encoded))
+        elif result.response_text:
+            await client.send_text(sender, result.response_text)
+        else:
+            await client.send_text(sender, result.error or "The voice test could not be completed.")
+    except (WhatsAppConfigurationError, WhatsAppError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"status": "processed"}

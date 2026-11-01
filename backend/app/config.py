@@ -22,6 +22,10 @@ class Settings:
     tts_model: str = os.getenv("GNANI_TTS_MODEL", "timbre-v2.5")
     tts_voice: str = os.getenv("GNANI_TTS_VOICE", "Pranav")
     tts_language_code: str = os.getenv("GNANI_TTS_LANGUAGE_CODE", "en-IN")
+    whatsapp_verify_token: str | None = os.getenv("WHATSAPP_VERIFY_TOKEN")
+    whatsapp_access_token: str | None = os.getenv("WHATSAPP_ACCESS_TOKEN")
+    whatsapp_phone_number_id: str | None = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    whatsapp_graph_version: str = os.getenv("WHATSAPP_GRAPH_VERSION", "v21.0")
     demo_seed: bool = _env_flag("DEMO_SEED")
 
 
