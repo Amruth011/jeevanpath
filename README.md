@@ -37,3 +37,11 @@ The documented REST adapters use Gnani's Vachana API:
 No Evon HTTP adapter is implemented because no reasoning API is available. Deterministic safety rules remain authoritative; without verified discharge context or a reasoning provider, the workflow returns a safe uncertainty response and opens human review.
 
 The browser test page is available at `http://localhost:3000`.
+
+## Vercel deployments
+
+The GitHub repository is connected to Vercel. Pushes to `main` trigger a new
+deployment automatically; use a small documentation change such as this one
+to verify the connection without changing application behavior. If a push
+does not create a deployment, check the Vercel project's Git settings and
+confirm that the production branch is `main`.
