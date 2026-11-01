@@ -94,11 +94,33 @@ async def test_timbre_surfaces_safe_error_body(monkeypatch):
     client = FakeAsyncClient(response)
     monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **kwargs: client)
 
-    with pytest.raises(Exception, match="INVALID_MODEL"):
+    with pytest.raises(Exception) as exc_info:
         await GnaniTimbre(
             "Timbre", "https://example.test", "secret",
             "timbre-v2.5", "Pranav", "en-IN",
         ).synthesize("hello")
+    assert '{"error":{"type":"INVALID_MODEL","message":"Model is not supported"}}' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_timbre_redacts_secret_from_error_body(monkeypatch):
+    response = httpx.Response(
+        400,
+        text='{"message":"bad request","key":"vach_sensitive-value"}',
+        request=httpx.Request("POST", "https://example.test"),
+    )
+    client = FakeAsyncClient(response)
+    monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **kwargs: client)
+
+    with pytest.raises(Exception) as exc_info:
+        await GnaniTimbre(
+            "Timbre", "https://example.test", "secret",
+            "timbre-v2.5", "Pranav", "en-IN",
+        ).synthesize("hello")
+
+    assert '"message":"bad request"' in str(exc_info.value)
+    assert "vach_sensitive-value" not in str(exc_info.value)
+    assert "[REDACTED_SECRET]" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -124,3 +146,7 @@ def test_health_never_returns_api_key(monkeypatch):
     body = TestClient(app).get("/health").json()
     assert "secret-value" not in str(body)
     assert body["providers"]["prisma"]["status"] == "configured"
+    assert body["providers"]["timbre"]["endpoint"] == "https://example.test/tts/api/v1/tts/inference"
+    assert body["providers"]["timbre"]["model"] == "timbre-v2.5"
+    assert body["providers"]["timbre"]["voice"] == "Pranav"
+    assert body["providers"]["timbre"]["language"] == "en-IN"

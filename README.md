@@ -31,7 +31,7 @@ The documented REST adapters use Gnani's Vachana API:
 
 - Health check: `GET /api/health` (the unprefixed `/health` endpoint remains available for local use).
 - Prisma: `POST /stt/v3`, multipart `audio_file`, `language_code`, `model=prisma-v3.0`, and `format=transcribe`; response JSON contains `transcript`.
-- Timbre: `POST /api/v1/tts/inference`, JSON text/voice/model/audio configuration; response is audio bytes, configured here as 48 kHz linear PCM WAV.
+- Timbre: `POST /api/v1/tts/inference`, JSON text/voice/model/audio configuration; response is audio bytes, configured here as 48 kHz linear PCM WAV. The backend logs the endpoint, header names, JSON field names, selected model/voice/language, and audio configuration without logging secret values; `/api/health` exposes the same non-secret runtime provider diagnostics.
 - Timbre configuration uses `GNANI_TTS_MODEL`, `GNANI_TTS_VOICE`, and `GNANI_TTS_LANGUAGE_CODE`; defaults are the documented `timbre-v2.5`, `Pranav`, and `en-IN`.
 - Authentication uses `X-API-Key-ID`; secrets are never included in health responses.
 

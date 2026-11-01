@@ -1,8 +1,15 @@
 from dataclasses import dataclass
+import logging
+import re
 from typing import Protocol
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 import httpx
+
+
+logger = logging.getLogger(__name__)
+TTS_PATH = "/api/v1/tts/inference"
 
 
 class ProviderConfigurationError(RuntimeError):
@@ -37,6 +44,17 @@ def _endpoint(url: str, path: str) -> str:
     return url if url.rstrip("/").endswith(path) else f"{url.rstrip('/')}{path}"
 
 
+def _safe_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path.rstrip("/"), "", ""))
+
+
+def _safe_response_detail(body: str) -> str:
+    return re.sub(r"(?i)(vach_[A-Za-z0-9_]+)", "[REDACTED_SECRET]", body.strip())
+
+
 class SttProvider(Protocol):
     async def transcribe(self, audio: bytes, content_type: str, filename: str) -> str: ...
 
@@ -59,8 +77,8 @@ class GnaniProvider:
 
     def health(self) -> dict[str, str | bool]:
         if not self.url or not self.api_key:
-            return {"configured": False, "status": "missing_configuration"}
-        return {"configured": True, "status": "configured", "url": self.url}
+            return {"configured": False, "status": "missing_configuration", "url": _safe_url(self.url)}
+        return {"configured": True, "status": "configured", "url": _safe_url(self.url)}
 
 
 @dataclass
@@ -114,6 +132,17 @@ class GnaniTimbre(GnaniProvider):
                 f"Gnani Timbre language {self.language_code!r} is not documented."
             )
 
+    def health(self) -> dict[str, str | bool | None]:
+        configured = bool(self.url and self.api_key)
+        return {
+            "configured": configured,
+            "status": "configured" if configured else "missing_configuration",
+            "endpoint": _safe_url(_endpoint(self.url, TTS_PATH) if self.url else None),
+            "model": self.model,
+            "voice": self.voice,
+            "language": self.language_code,
+        }
+
     async def synthesize(self, text: str) -> bytes:
         self._check_config()
         self._check_tts_config()
@@ -122,23 +151,41 @@ class GnaniTimbre(GnaniProvider):
             "X-API-Request-ID": str(uuid4()),
             "Content-Type": "application/json",
         }
+        audio_config = {
+            "sample_rate": 48000,
+            "num_channels": 1,
+            "sample_width": 2,
+            "encoding": "linear_pcm",
+            "container": "wav",
+        }
         payload = {
             "text": text,
             "voice": self.voice,
             "model": self.model,
             "language": self.language_code,
             "speed": 1.0,
-            "audio_config": {"sample_rate": 48000, "encoding": "linear_pcm", "container": "wav"},
+            "audio_config": audio_config,
         }
-        payload["audio_config"].update({"num_channels": 1, "sample_width": 2})
+        endpoint = _endpoint(self.url, TTS_PATH)
+        logger.info(
+            "Gnani Timbre request: url=%s header_names=%s json_fields=%s "
+            "model=%s voice=%s language=%s audio_config=%s",
+            _safe_url(endpoint),
+            sorted(headers),
+            sorted(payload),
+            self.model,
+            self.voice,
+            self.language_code,
+            audio_config,
+        )
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 response = await client.post(
-                    _endpoint(self.url, "/api/v1/tts/inference"), headers=headers, json=payload
+                    endpoint, headers=headers, json=payload
                 )
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            detail = exc.response.text.strip()
+            detail = _safe_response_detail(exc.response.text)
             suffix = f" ({detail})" if detail else ""
             raise ProviderError(
                 f"Gnani Timbre request failed with HTTP {exc.response.status_code}{suffix}"
