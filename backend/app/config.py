@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parents[1] / ".env")
 
 
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() == "true"
+
+
 @dataclass(frozen=True)
 class Settings:
     prisma_url: str | None = os.getenv("GNANI_PRISMA_URL")
@@ -16,6 +20,7 @@ class Settings:
     timbre_api_key: str | None = os.getenv("GNANI_TIMBRE_API_KEY")
     stt_language_code: str = os.getenv("GNANI_STT_LANGUAGE_CODE", "en-IN")
     tts_voice: str = os.getenv("GNANI_TTS_VOICE", "Pranav")
+    demo_seed: bool = _env_flag("DEMO_SEED")
 
 
 settings = Settings()

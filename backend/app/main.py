@@ -13,8 +13,18 @@ from .providers import (
 )
 from .safety import evaluate_transcript, validate_response
 from .schemas import ModelEvent, PatientResponse, TurnResponse
+from .seed import seed_demo_data_if_missing
 
 app = FastAPI(title="JeevanPath API", version="0.1.0")
+
+
+@app.middleware("http")
+async def initialize_database(request, call_next):
+    with connection():
+        pass
+    if settings.demo_seed:
+        seed_demo_data_if_missing()
+    return await call_next(request)
 
 
 def _providers():
