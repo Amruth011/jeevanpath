@@ -5,6 +5,16 @@ from app.main import app
 from app.seed import seed_test_data
 
 
+def test_fresh_database_creates_tables_and_returns_empty_results(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.database.DATABASE_PATH", tmp_path / "fresh.db")
+    client = TestClient(app)
+
+    assert client.get("/api/overview").json()["patient_count"] == 0
+    assert client.get("/api/patients").json() == []
+    assert client.get("/api/activity").json() == []
+    assert client.get("/api/escalations").json() == []
+
+
 def test_seed_creates_one_test_patient_and_api_data(monkeypatch, tmp_path):
     monkeypatch.setattr("app.database.DATABASE_PATH", tmp_path / "test.db")
     seed_test_data()

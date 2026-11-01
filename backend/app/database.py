@@ -1,8 +1,15 @@
+import os
 import sqlite3
 from pathlib import Path
 
 
-DATABASE_PATH = Path(__file__).parents[2] / "data" / "jeevanpath.db"
+LOCAL_DATABASE_PATH = Path(__file__).parents[2] / "data" / "jeevanpath.db"
+DATABASE_PATH = Path(
+    os.getenv(
+        "JEEVANPATH_DATABASE_PATH",
+        "/tmp/jeevanpath.db" if os.getenv("VERCEL") == "1" else str(LOCAL_DATABASE_PATH),
+    )
+)
 
 
 def connection() -> sqlite3.Connection:
