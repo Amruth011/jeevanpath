@@ -36,6 +36,28 @@ async def test_prisma_uses_documented_multipart_contract(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_prisma_rejects_empty_audio_before_request():
+    with pytest.raises(Exception, match="recording was empty"):
+        await GnaniPrisma("Prisma", "https://example.test", "secret").transcribe(b"", "audio/webm")
+
+
+@pytest.mark.asyncio
+async def test_prisma_includes_safe_provider_error_detail(monkeypatch):
+    response = httpx.Response(
+        400,
+        text='{"type":"EMPTY_AUDIO","message":"Empty audio file received"}',
+        request=httpx.Request("POST", "https://example.test"),
+    )
+    client = FakeAsyncClient(response)
+    monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **kwargs: client)
+
+    with pytest.raises(Exception, match="EMPTY_AUDIO"):
+        await GnaniPrisma("Prisma", "https://example.test", "secret").transcribe(
+            b"audio", "audio/webm"
+        )
+
+
+@pytest.mark.asyncio
 async def test_timbre_uses_documented_json_and_returns_audio(monkeypatch):
     response = httpx.Response(200, content=b"RIFFfake-wav", request=httpx.Request("POST", "https://example.test"))
     client = FakeAsyncClient(response)

@@ -49,6 +49,8 @@ class GnaniPrisma(GnaniProvider):
 
     async def transcribe(self, audio: bytes, content_type: str, filename: str = "audio.webm") -> str:
         self._check_config()
+        if not audio:
+            raise ProviderError("Gnani Prisma request was not sent: the recording was empty.")
         headers = {"X-API-Key-ID": self.api_key, "X-API-Request-ID": str(uuid4())}
         data = {"language_code": self.language_code, "model": "prisma-v3.0", "format": "transcribe"}
         files = {"audio_file": (filename, audio, content_type)}
@@ -57,6 +59,12 @@ class GnaniPrisma(GnaniProvider):
                 response = await client.post(_endpoint(self.url, "/stt/v3"), headers=headers, data=data, files=files)
                 response.raise_for_status()
                 result = response.json()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text.strip()
+            suffix = f" ({detail})" if detail else ""
+            raise ProviderError(
+                f"Gnani Prisma request failed with HTTP {exc.response.status_code}{suffix}"
+            ) from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise ProviderError(f"Gnani Prisma request failed: {exc}") from exc
         transcript = result.get("transcript")
