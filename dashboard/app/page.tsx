@@ -18,6 +18,7 @@ import {
 
 type View = "overview" | "patients" | "patient" | "escalations" | "voice";
 type Tone = "teal" | "amber" | "red" | "slate" | "green";
+const navigation: [View, string, string][] = [["overview", "Overview", "⌂"], ["patients", "Patients", "◉"], ["escalations", "Escalations", "!"], ["voice", "Voice test", "◌"]];
 
 function Badge({ children, tone = "slate" }: { children: React.ReactNode; tone?: Tone }) {
   const styles: Record<Tone, string> = {
@@ -38,15 +39,19 @@ function Sidebar({ view, setView, escalationCount }: { view: View; setView: (vie
   return <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
     <div className="flex h-20 items-center gap-3 border-b border-slate-100 px-7"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal text-lg font-black text-white">J</div><div><p className="text-lg font-black tracking-tight text-navy">JeevanPath</p><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Care operations</p></div></div>
     <div className="px-4 pt-7"><p className="eyebrow px-3 pb-3">Workspace</p><nav className="space-y-1" aria-label="Primary navigation">
-      {([["overview", "Overview", "⌂"], ["patients", "Patients", "◉"], ["escalations", "Escalations", "!"], ["voice", "Voice test", "◌"]] as [View, string, string][]).map(([id, label, icon]) => <button key={id} onClick={() => setView(id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold ${view === id ? "bg-mint text-teal" : "text-slate-500 hover:bg-slate-50"}`}><span className="w-5">{icon}</span>{label}{id === "escalations" && escalationCount > 0 && <span className="ml-auto rounded-full bg-urgent px-2 py-0.5 text-[10px] text-white">{escalationCount}</span>}</button>)}
+      {navigation.map(([id, label, icon]) => <button key={id} onClick={() => setView(id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold ${view === id ? "bg-mint text-teal" : "text-slate-500 hover:bg-slate-50"}`}><span className="w-5">{icon}</span>{label}{id === "escalations" && escalationCount > 0 && <span className="ml-auto rounded-full bg-urgent px-2 py-0.5 text-[10px] text-white">{escalationCount}</span>}</button>)}
     </nav></div>
     <div className="mt-auto border-t border-slate-100 p-5"><div className="rounded-xl bg-mist p-3"><p className="eyebrow">Development environment</p><p className="mt-1 text-xs leading-5 text-slate-600">TEST DATA only. Do not enter real clinical data without consent.</p></div></div>
   </aside>;
 }
 
-function Header({ view, setView }: { view: View; setView: (view: View) => void }) {
+function Header({ view, setView, onRefresh, refreshing }: { view: View; setView: (view: View) => void; onRefresh: () => void; refreshing: boolean }) {
   const title = view === "overview" ? "Overview" : view === "patients" ? "Patients" : view === "patient" ? "Patient profile" : view === "escalations" ? "Escalation queue" : "Patient voice test";
-  return <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/95 px-5 backdrop-blur md:px-8"><div><p className="hidden text-xs text-slate-400 sm:block">Workspace / {title}</p><h1 className="text-xl font-black text-navy">{title}</h1></div><div className="flex items-center gap-3"><TestLabel /><button onClick={() => setView("voice")} className="button-secondary hidden sm:inline-flex">Voice test</button></div></header>;
+  return <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/95 px-5 backdrop-blur md:px-8"><div><p className="hidden text-xs text-slate-400 sm:block">Workspace / {title}</p><h1 className="text-xl font-black text-navy">{title}</h1></div><div className="flex items-center gap-2 sm:gap-3"><TestLabel /><button onClick={onRefresh} disabled={refreshing} className="button-secondary" aria-label="Refresh dashboard data">{refreshing ? "Refreshing…" : "Refresh"}</button><button onClick={() => setView("voice")} className="button-secondary hidden sm:inline-flex">Voice test</button></div></header>;
+}
+
+function MobileNav({ view, setView, escalationCount }: { view: View; setView: (view: View) => void; escalationCount: number }) {
+  return <nav className="grid grid-cols-4 gap-1 border-b border-slate-200 bg-white px-3 py-2 lg:hidden" aria-label="Mobile navigation">{navigation.map(([id, label, icon]) => <button key={id} onClick={() => setView(id)} className={`relative rounded-lg px-2 py-2 text-center text-[11px] font-bold ${view === id ? "bg-mint text-teal" : "text-slate-500"}`}><span className="block text-base leading-4">{icon}</span>{label}{id === "escalations" && escalationCount > 0 && <span className="absolute right-2 top-1 rounded-full bg-urgent px-1.5 text-[9px] text-white">{escalationCount}</span>}</button>)}</nav>;
 }
 
 function StatCard({ label, value, detail, tone = "teal" }: { label: string; value: number; detail: string; tone?: Tone }) {
@@ -147,12 +152,18 @@ export default function Home() {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [testCase, setTestCase] = useState<TestCase | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    Promise.all([getOverview(), getPatients(), getActivity(), getEscalations(), getTestCase()])
+  const loadData = () => {
+    setRefreshing(true);
+    setError(null);
+    return Promise.all([getOverview(), getPatients(), getActivity(), getEscalations(), getTestCase()])
       .then(([overviewData, patientData, activityData, escalationData, testCaseData]) => { setOverview(overviewData); setPatients(patientData); setActivity(activityData); setEscalations(escalationData); setTestCase(testCaseData); })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load test data."));
-  }, []);
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load test data."))
+      .finally(() => setRefreshing(false));
+  };
+
+  useEffect(() => { void loadData(); }, []);
 
   const retryTestCase = () => {
     getTestCase().then(setTestCase).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load the synthetic test case."));
@@ -163,5 +174,5 @@ export default function Home() {
   }, [view, patients]);
 
   const content = error ? <div className="panel p-8 text-center text-sm text-urgent">{error}</div> : !overview ? <div className="panel p-8 text-center text-sm text-slate-500">Loading TEST DATA...</div> : view === "overview" ? <Overview data={overview} patients={patients} activity={activity} setView={setView} /> : view === "patients" ? <PatientsView patients={patients} setView={setView} /> : view === "patient" ? <PatientDetail patient={selectedPatient} setView={setView} /> : view === "escalations" ? <EscalationsView escalations={escalations} /> : <VoiceTest testCase={testCase} onRetry={retryTestCase} />;
-  return <div className="min-h-screen bg-[#f7faf9] text-ink"><Sidebar view={view} setView={setView} escalationCount={overview?.pending_escalations ?? 0} /><div className="lg:pl-64"><Header view={view} setView={setView} /><main className="mx-auto max-w-7xl p-5 md:p-8">{content}</main></div></div>;
+  return <div className="min-h-screen bg-[#f7faf9] text-ink"><Sidebar view={view} setView={setView} escalationCount={overview?.pending_escalations ?? 0} /><div className="lg:pl-64"><Header view={view} setView={setView} onRefresh={() => void loadData()} refreshing={refreshing} /><MobileNav view={view} setView={setView} escalationCount={overview?.pending_escalations ?? 0} /><main className="mx-auto max-w-7xl p-5 md:p-8">{content}</main></div></div>;
 }
